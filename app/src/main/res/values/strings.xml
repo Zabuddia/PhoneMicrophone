@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">PhoneMicrophone</string>
+    <string name="mic_on">Mic On</string>
+    <string name="mic_off">Start Mic</string>
+</resources>
