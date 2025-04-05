@@ -8,7 +8,9 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -19,13 +21,17 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private var isConnected = false
-    private lateinit var button: Button
+    private lateinit var toggleButton: Button
+    private lateinit var settingsButton: Button
+    private lateinit var hostInput: EditText
     private var socket: WebSocket? = null
     private var audioRecord: AudioRecord? = null
     private var isRecording = false
 
     private var sampleRate = 48000
     private var bufferSize = 0
+    private var inSettings = false
+    private var hostname = "mic.local"
 
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -52,24 +58,73 @@ class MainActivity : AppCompatActivity() {
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        button = Button(this).apply {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        toggleButton = Button(this).apply {
             text = getString(R.string.mic_off)
             setBackgroundColor(Color.RED)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1f
+            )
             setOnClickListener {
-                Log.d("MicApp", "Button clicked")
-                if (ActivityCompat.checkSelfPermission(
-                        this@MainActivity,
-                        Manifest.permission.RECORD_AUDIO
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                } else {
-                    toggleWebSocket()
+                if (!inSettings) {
+                    Log.d("MicApp", "Toggle button clicked")
+                    if (ActivityCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.RECORD_AUDIO
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    } else {
+                        toggleWebSocket()
+                    }
                 }
             }
         }
 
-        setContentView(button)
+        hostInput = EditText(this).apply {
+            hint = "hostname:port"
+            setText(hostname)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            visibility = EditText.GONE
+        }
+
+        settingsButton = Button(this).apply {
+            text = getString(R.string.settings)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setOnClickListener {
+                inSettings = !inSettings
+                if (inSettings) {
+                    hostInput.visibility = EditText.VISIBLE
+                    text = getString(R.string.save)
+                } else {
+                    hostInput.visibility = EditText.GONE
+                    hostname = hostInput.text.toString()
+                    text = getString(R.string.settings)
+                }
+            }
+        }
+
+        layout.addView(toggleButton)
+        layout.addView(hostInput)
+        layout.addView(settingsButton)
+
+        setContentView(layout)
     }
 
     private fun getSupportedSampleRate(): Int {
@@ -85,8 +140,8 @@ class MainActivity : AppCompatActivity() {
                 return rate
             }
         }
-        Log.w("MicApp", "No preferred sample rate found, using default 44100")
-        return 44100
+        Log.w("MicApp", "No preferred sample rate found, using default 48000")
+        return 48000
     }
 
     private fun toggleWebSocket() {
@@ -95,12 +150,13 @@ class MainActivity : AppCompatActivity() {
             isConnected = false
             stopAudioRecording()
             socket?.close(1000, "User closed connection")
-            button.setBackgroundColor(Color.RED)
-            button.text = getString(R.string.mic_off)
+            toggleButton.setBackgroundColor(Color.RED)
+            toggleButton.text = getString(R.string.mic_off)
         } else {
-            Log.d("MicApp", "Opening WebSocket")
+            val wsUrl = "ws://$hostname/ws"
+            Log.d("MicApp", "Opening WebSocket to $wsUrl")
             val request = Request.Builder()
-                .url("ws://alan-laptop-arch:2000/ws")
+                .url(wsUrl)
                 .build()
 
             socket = client.newWebSocket(request, object : WebSocketListener() {
@@ -108,8 +164,8 @@ class MainActivity : AppCompatActivity() {
                     Log.d("MicApp", "WebSocket opened")
                     runOnUiThread {
                         isConnected = true
-                        button.setBackgroundColor(Color.GREEN)
-                        button.text = getString(R.string.mic_on)
+                        toggleButton.setBackgroundColor(Color.GREEN)
+                        toggleButton.text = getString(R.string.mic_on)
                     }
                     webSocket.send("request")
                     val config = JSONObject()
@@ -123,8 +179,8 @@ class MainActivity : AppCompatActivity() {
                     Log.e("MicApp", "WebSocket failed: ${t.message}", t)
                     runOnUiThread {
                         isConnected = false
-                        button.setBackgroundColor(Color.RED)
-                        button.text = getString(R.string.mic_off)
+                        toggleButton.setBackgroundColor(Color.RED)
+                        toggleButton.text = getString(R.string.mic_off)
                     }
                     stopAudioRecording()
                 }
@@ -133,8 +189,8 @@ class MainActivity : AppCompatActivity() {
                     Log.d("MicApp", "WebSocket closed: $reason")
                     runOnUiThread {
                         isConnected = false
-                        button.setBackgroundColor(Color.RED)
-                        button.text = getString(R.string.mic_off)
+                        toggleButton.setBackgroundColor(Color.RED)
+                        toggleButton.text = getString(R.string.mic_off)
                     }
                     stopAudioRecording()
                 }
