@@ -52,11 +52,9 @@ class MainActivity : AppCompatActivity() {
         Log.d("MicApp", "onCreate called")
 
         sampleRate = getSupportedSampleRate()
-        bufferSize = AudioRecord.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
+
+        val chunkDurationMs = 5  // Match AudioWorklet-style chunk size
+        bufferSize = (sampleRate * chunkDurationMs / 1000.0).toInt() * 2  // 2 bytes/sample for 16-bit mono
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -70,8 +68,8 @@ class MainActivity : AppCompatActivity() {
         toggleButton = Button(this).apply {
             text = getString(R.string.mic_off)
             setBackgroundColor(Color.RED)
-            setTextColor(Color.BLACK) // <-- Make text white
-            textSize = 40f            // <-- Make text bigger
+            setTextColor(Color.BLACK)
+            textSize = 40f
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -158,9 +156,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             val wsUrl = "ws://$hostname/ws"
             Log.d("MicApp", "Opening WebSocket to $wsUrl")
-            val request = Request.Builder()
-                .url(wsUrl)
-                .build()
+            val request = Request.Builder().url(wsUrl).build()
 
             socket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -212,7 +208,6 @@ class MainActivity : AppCompatActivity() {
                         webSocket.close(1000, "Rejected by server")
                     }
                 }
-
             })
         }
     }
@@ -233,10 +228,22 @@ class MainActivity : AppCompatActivity() {
 
             Thread {
                 val buffer = ByteArray(bufferSize)
+                val bytesPerSecond = sampleRate * 2
+                val targetDelayNs = 1_000_000_000L * bufferSize / bytesPerSecond
+                var nextTime = System.nanoTime()
+
                 while (isRecording && audioRecord != null) {
                     val read = audioRecord!!.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         socket?.send(buffer.toByteString(0, read))
+                    }
+
+                    nextTime += targetDelayNs
+                    val sleepNs = nextTime - System.nanoTime()
+                    if (sleepNs > 0) {
+                        Thread.sleep(sleepNs / 1_000_000, (sleepNs % 1_000_000).toInt())
+                    } else {
+                        nextTime = System.nanoTime() // fell behind; reset
                     }
                 }
             }.start()
