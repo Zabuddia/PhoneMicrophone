@@ -3,5 +3,6 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.1.64.245</domain>
         <domain includeSubdomains="true">alan-laptop-arch</domain>
+        <domain includeSubdomains="true">mic.local</domain>
     </domain-config>
 </network-security-config>

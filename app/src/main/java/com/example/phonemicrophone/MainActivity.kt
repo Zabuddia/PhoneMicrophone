@@ -70,6 +70,9 @@ class MainActivity : AppCompatActivity() {
         toggleButton = Button(this).apply {
             text = getString(R.string.mic_off)
             setBackgroundColor(Color.RED)
+            setTextColor(Color.BLACK) // <-- Make text white
+            textSize = 40f            // <-- Make text bigger
+            setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -194,6 +197,22 @@ class MainActivity : AppCompatActivity() {
                     }
                     stopAudioRecording()
                 }
+
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    Log.d("MicApp", "Message received: $text")
+                    if (text == "rejected") {
+                        Log.w("MicApp", "Rejected by server")
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Mic is already in use", Toast.LENGTH_SHORT).show()
+                            isConnected = false
+                            toggleButton.setBackgroundColor(Color.RED)
+                            toggleButton.text = getString(R.string.mic_off)
+                        }
+                        stopAudioRecording()
+                        webSocket.close(1000, "Rejected by server")
+                    }
+                }
+
             })
         }
     }
