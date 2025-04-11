@@ -180,6 +180,14 @@ class MainActivity : AppCompatActivity() {
                         isConnected = false
                         toggleButton.setBackgroundColor(Color.RED)
                         toggleButton.text = getString(R.string.mic_off)
+
+                        val errorMsg = if (t.message?.contains("Unable to resolve host") == true) {
+                            "Could not resolve host: $hostname"
+                        } else {
+                            "WebSocket failed: ${t.message}"
+                        }
+
+                        Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_SHORT).show()
                     }
                     stopAudioRecording()
                 }
